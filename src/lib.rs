@@ -191,12 +191,9 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            println!("{:?}", self.space_pressed);
             if self.space_pressed == true {
-                println!("Pipeline 1");
                 render_pass.set_pipeline(&self.render_pipeline);
             } else {
-                println!("Pipeline 2");
                 render_pass.set_pipeline(&self.render_pipeline_2);
             }
             render_pass.draw(0..3, 0..1);
