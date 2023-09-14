@@ -4,6 +4,7 @@ use winit::{
     window::WindowBuilder,
 };
 use winit::window::Window;
+use std::borrow::Cow;
 
 struct State {
     surface: wgpu::Surface,
@@ -15,6 +16,9 @@ struct State {
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
+    render_pipeline_2: wgpu::RenderPipeline,
+
+    space_pressed: bool,
 }
 
 impl State {
@@ -63,11 +67,35 @@ impl State {
 
         let clear_color = wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 };
 
-        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        //     label: Some("Basic Shader"),
-        //     source: wgpu::ShaderSource::Wgsl(include_str!("basic.wgsl").into()),
-        // });
-        let shader = device.create_shader_module(wgpu::include_wgsl!("basic.wgsl"));
+        let render_pipeline = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main", "fs_main_2");
+        let render_pipeline_2 = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main_2", "fs_main");
+
+        Self {
+            window,
+            surface,
+            device,
+            queue,
+            surface_config,
+            size,
+            clear_color,
+            render_pipeline,
+            render_pipeline_2,
+            space_pressed: false,
+        }
+    }
+
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
+
+    fn create_render_pipeline(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration, shader: Cow<'_, str>, vs_entry: &str, fs_entry: &str) -> wgpu::RenderPipeline {
+        // Real code to create a shader
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Basic Shader"),
+            source: wgpu::ShaderSource::Wgsl(shader),
+        });
+        // Shorthand helper for shader from file
+        // let shader = device.create_shader_module(wgpu::include_wgsl!(shader_name));
         
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
@@ -80,12 +108,12 @@ impl State {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: vs_entry,
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: fs_entry,
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -109,21 +137,7 @@ impl State {
             },
             multiview: None,
         });
-
-        Self {
-            window,
-            surface,
-            device,
-            queue,
-            surface_config,
-            size,
-            clear_color,
-            render_pipeline
-        }
-    }
-
-    pub fn window(&self) -> &Window {
-        &self.window
+        render_pipeline
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -136,7 +150,20 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved { device_id, position, modifiers } => {
+                self.clear_color.r = position.x as f64 / self.size.width as f64;
+                self.clear_color.b = position.y as f64 / self.size.height as f64;
+                true
+            }
+            WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
+                println!("{:?}", input);
+                // Spacebar physical location
+                self.space_pressed = input.scancode == 57 && input.state == winit::event::ElementState::Pressed;
+                true
+            }
+            _ => false
+        }
     }
 
     fn update(&mut self) {
@@ -164,7 +191,14 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            println!("{:?}", self.space_pressed);
+            if self.space_pressed == true {
+                println!("Pipeline 1");
+                render_pass.set_pipeline(&self.render_pipeline);
+            } else {
+                println!("Pipeline 2");
+                render_pass.set_pipeline(&self.render_pipeline_2);
+            }
             render_pass.draw(0..3, 0..1);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -202,10 +236,6 @@ pub async fn run() {
                 }
                 WindowEvent::ScaleFactorChanged { scale_factor: _, new_inner_size } => {
                     state.resize(**new_inner_size)
-                }
-                WindowEvent::CursorMoved { device_id, position, modifiers } => {
-                    state.clear_color.r = position.x as f64 / state.size.width as f64;
-                    state.clear_color.b = position.y as f64 / state.size.height as f64;
                 }
                 _ => {}
             }
