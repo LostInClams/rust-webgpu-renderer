@@ -5,6 +5,30 @@ use winit::{
 };
 use winit::window::Window;
 use std::borrow::Cow;
+use wgpu::util::{DeviceExt, RenderEncoder};
+
+mod mesh;
+
+// Triangle
+const TIANGLE_VERTICES: &[mesh::Vertex] = &[
+    mesh::Vertex { position: [0., 0.5, 0.], color: [ 1., 0., 0.] },
+    mesh::Vertex { position: [-0.5, -0.5, 0.], color: [ 0., 1., 0.] },
+    mesh::Vertex { position: [0.5, -0.5, 0.], color: [ 0., 0., 1.] },
+];
+
+// Trigonometic functions don't work in a const context :(
+const PENTAGON_VERTICES: &[mesh::Vertex] = &[
+    mesh::Vertex { position: [0.0     * 0.5,  1.0   * 0.5, 0.0], color: [0.7, 0.2, 0.8] },
+    mesh::Vertex { position: [0.951   * 0.5,  0.309 * 0.5, 0.0], color: [0.7, 0.2, 0.8] },
+    mesh::Vertex { position: [0.5878  * 0.5, -0.809 * 0.5, 0.0], color: [0.7, 0.2, 0.8] },
+    mesh::Vertex { position: [-0.5878 * 0.5, -0.809 * 0.5, 0.0], color: [0.7, 0.2, 0.8] },
+    mesh::Vertex { position: [-0.951  * 0.5,  0.309 * 0.5, 0.0], color: [0.7, 0.2, 0.8] },
+];
+const PENTAGON_INDICES: &[u16] = &[
+    0, 4, 1,
+    4, 2, 1,
+    4, 3, 2,
+];
 
 struct State {
     surface: wgpu::Surface,
@@ -17,6 +41,9 @@ struct State {
 
     render_pipeline: wgpu::RenderPipeline,
     render_pipeline_2: wgpu::RenderPipeline,
+
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
 
     space_pressed: bool,
 }
@@ -34,7 +61,7 @@ impl State {
 
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             },
@@ -53,7 +80,6 @@ impl State {
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(surface_capabilities.formats[0]);
-        println!("why: {:?}", surface_capabilities.present_modes[0]);
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -70,6 +96,18 @@ impl State {
         let render_pipeline = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main", "fs_main_2");
         let render_pipeline_2 = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main_2", "fs_main");
 
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex buffer"),
+            contents: bytemuck::cast_slice(PENTAGON_VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index buffer"),
+            contents: bytemuck::cast_slice(PENTAGON_INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         Self {
             window,
             surface,
@@ -80,6 +118,8 @@ impl State {
             clear_color,
             render_pipeline,
             render_pipeline_2,
+            vertex_buffer,
+            index_buffer,
             space_pressed: false,
         }
     }
@@ -109,7 +149,9 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: vs_entry,
-                buffers: &[],
+                buffers: &[
+                    mesh::Vertex::desc(),
+                ],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -159,8 +201,11 @@ impl State {
             WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
                 println!("{:?}", input);
                 // Spacebar physical location
-                self.space_pressed = input.scancode == 57 && input.state == winit::event::ElementState::Pressed;
-                true
+                if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Space) {
+                    self.space_pressed = input.state == winit::event::ElementState::Pressed;
+                    return true
+                }
+                false
             }
             _ => false
         }
@@ -196,7 +241,9 @@ impl State {
             } else {
                 render_pass.set_pipeline(&self.render_pipeline_2);
             }
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..PENTAGON_INDICES.len() as u32, 0, 0..1);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
