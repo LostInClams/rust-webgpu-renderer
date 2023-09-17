@@ -2,7 +2,7 @@ use camera::CameraUniform;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::WindowBuilder, dpi::PhysicalPosition,
 };
 use winit::window::Window;
 use std::borrow::Cow;
@@ -54,10 +54,12 @@ struct State {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    prev_mouse_pos: PhysicalPosition<f64>,
 
     diffuse_bind_group: wgpu::BindGroup,
 
     space_pressed: bool,
+    left_mouse_pressed: bool,
 }
 
 impl State {
@@ -193,6 +195,9 @@ impl State {
             fov_vertical: 45.,
             znear: 0.1,
             zfar: 100.,
+
+            yaw: 0.,
+            pitch: 0.,
         };
 
         let mut camera_uniform = camera::CameraUniform::new();
@@ -283,8 +288,10 @@ impl State {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
+            prev_mouse_pos: PhysicalPosition { x: -1., y: -1. },
             diffuse_bind_group,
             space_pressed: false,
+            left_mouse_pressed: false,
         }
     }
 
@@ -360,9 +367,29 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
+            WindowEvent::MouseInput { device_id, state, button, modifiers } => {
+                println!("{:?} {:?}", state, button);
+                if button == &MouseButton::Left {
+                    if state == &ElementState::Pressed {
+                        self.left_mouse_pressed = true;
+
+                    } else {
+                        self.left_mouse_pressed = false;
+                    }
+                }
+                true
+            },
             WindowEvent::CursorMoved { device_id, position, modifiers } => {
-                self.clear_color.r = position.x as f64 / self.size.width as f64;
-                self.clear_color.b = position.y as f64 / self.size.height as f64;
+                if (self.left_mouse_pressed) {
+                    let dx = position.x - self.prev_mouse_pos.x;
+                    let dy = position.y - self.prev_mouse_pos.y;
+                    println!("{:?} {:?}", dx, dy);
+                    self.camera.handle_input(dx, dy);
+                } else {
+                    self.clear_color.r = position.x as f64 / self.size.width as f64;
+                    self.clear_color.b = position.y as f64 / self.size.height as f64;
+                }
+                self.prev_mouse_pos = *position;
                 true
             }
             WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
@@ -379,7 +406,8 @@ impl State {
     }
 
     fn update(&mut self) {
-        
+        self.camera_uniform.update_view_projection(&self.camera);
+        self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
