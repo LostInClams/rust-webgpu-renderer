@@ -35,9 +35,6 @@ pub struct Camera {
     pub fov_vertical: f32,
     pub znear: f32,
     pub zfar: f32,
-
-    pub yaw: f32,
-    pub pitch: f32,
 }
 
 impl Camera {
@@ -47,13 +44,64 @@ impl Camera {
         let proj = cgmath::perspective(cgmath::Deg(self.fov_vertical), self.aspect_ratio, self.znear, self.zfar);
         OPENGL_TO_WGPU_MATRIX * proj * view
     }
+}
 
+pub struct FpsCamera {
+    camera: Camera,
+    
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+#[allow(dead_code, unused)]
+impl FpsCamera {
     pub fn handle_input(&mut self, dx: f64, dy: f64) {
         self.yaw -= dx as f32 * (std::f32::consts::PI / 180.) * 0.5;
         self.pitch += dy as f32 * (std::f32::consts::PI / 180.) * 0.5;
 
         // self.forward = cgmath::vec3(f32::sin(self.yaw), 0., -f32::cos(self.yaw));
-        self.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
-        println!("{:?} {:?}", self.forward, self.forward.magnitude());
+        self.camera.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
+        println!("{:?} {:?}", self.camera.forward, self.camera.forward.magnitude());
+    }
+}
+
+pub struct OrbitCamera {
+    camera: Camera,
+
+    pub pivot: cgmath::Point3<f32>,
+    pub offset: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+impl OrbitCamera {
+    pub fn new(camera: Camera, pivot: cgmath::Point3<f32>, offset: f32, yaw: f32, pitch: f32) -> Self {
+        Self {
+            camera,
+            pivot,
+            offset,
+            yaw,
+            pitch,
+        }
+    }
+
+    pub fn handle_mouse_drag(&mut self, dx: f64, dy: f64) {
+        self.yaw += dx as f32 * (std::f32::consts::PI / 180.) * 0.5;
+        self.pitch -= dy as f32 * (std::f32::consts::PI / 180.) * 0.5;
+
+        // self.forward = cgmath::vec3(f32::sin(self.yaw), 0., -f32::cos(self.yaw));
+        self.camera.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
+        self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
+        println!("{:?} {:?}", self.camera.forward, self.camera.forward.magnitude());
+    }
+
+    pub fn handle_scroll(&mut self, dz: f32) {
+        self.offset += self.offset * 0.2 * dz;
+        println!("{:?}", self.offset);
+        self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
+    }
+
+    pub fn camera(&self) -> &Camera {
+        &self.camera
     }
 }

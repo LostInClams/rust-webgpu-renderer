@@ -6,17 +6,19 @@ use winit::{
 };
 use winit::window::Window;
 use std::borrow::Cow;
-use wgpu::{util::{DeviceExt, RenderEncoder}, BindGroupLayout};
+use wgpu::{util::DeviceExt, BindGroupLayout};
 
 mod mesh;
 mod camera;
 
 // Triangle
+#[allow(unused)]
 const TIANGLE_VERTICES: &[mesh::Vertex] = &[
     mesh::Vertex { position: [0., 0.5, 0.],    color: [ 1., 1., 1.], uv: [0.5, 0.0] },
     mesh::Vertex { position: [-0.5, -0.5, 0.], color: [ 1., 1., 1.], uv: [0.0, 1.0] },
     mesh::Vertex { position: [0.5, -0.5, 0.],  color: [ 1., 1., 1.], uv: [1.0, 1.0] },
 ];
+#[allow(unused)]
 const TRIANGLE_INDICES: &[u16] = &[
     0, 1, 2
 ];
@@ -50,7 +52,7 @@ struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 
-    camera: camera::Camera,
+    orbit_camera: camera::OrbitCamera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -195,13 +197,12 @@ impl State {
             fov_vertical: 45.,
             znear: 0.1,
             zfar: 100.,
-
-            yaw: 0.,
-            pitch: 0.,
         };
 
+        let orbit_camera = camera::OrbitCamera::new(camera, cgmath::Point3 { x: 0., y: 0., z: 0. }, 2., 0., 0.);
+
         let mut camera_uniform = camera::CameraUniform::new();
-        camera_uniform.update_view_projection(&camera);
+        camera_uniform.update_view_projection(orbit_camera.camera());
 
         let camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -284,7 +285,7 @@ impl State {
             render_pipeline_2,
             vertex_buffer,
             index_buffer,
-            camera,
+            orbit_camera,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
@@ -367,7 +368,7 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::MouseInput { device_id, state, button, modifiers } => {
+            WindowEvent::MouseInput { device_id: _, state, button, .. } => {
                 println!("{:?} {:?}", state, button);
                 if button == &MouseButton::Left {
                     if state == &ElementState::Pressed {
@@ -379,12 +380,21 @@ impl State {
                 }
                 true
             },
-            WindowEvent::CursorMoved { device_id, position, modifiers } => {
-                if (self.left_mouse_pressed) {
+            WindowEvent::MouseWheel { device_id: _, delta, phase: _, .. } => {
+                match delta {
+                    MouseScrollDelta::LineDelta(_h, v) => {
+                        self.orbit_camera.handle_scroll(*v)
+                    }
+                    _ => ()
+                }
+                true
+            }
+            WindowEvent::CursorMoved { device_id: _, position, .. } => {
+                if self.left_mouse_pressed {
                     let dx = position.x - self.prev_mouse_pos.x;
                     let dy = position.y - self.prev_mouse_pos.y;
                     println!("{:?} {:?}", dx, dy);
-                    self.camera.handle_input(dx, dy);
+                    self.orbit_camera.handle_mouse_drag(dx, dy);
                 } else {
                     self.clear_color.r = position.x as f64 / self.size.width as f64;
                     self.clear_color.b = position.y as f64 / self.size.height as f64;
@@ -392,7 +402,7 @@ impl State {
                 self.prev_mouse_pos = *position;
                 true
             }
-            WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
+            WindowEvent::KeyboardInput { device_id: _, input, is_synthetic: _ } => {
                 println!("{:?}", input);
                 // Spacebar physical location
                 if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Space) {
@@ -406,7 +416,7 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.camera_uniform.update_view_projection(&self.camera);
+        self.camera_uniform.update_view_projection(&self.orbit_camera.camera());
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
     }
 
