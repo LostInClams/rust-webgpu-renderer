@@ -1,4 +1,4 @@
-use cgmath::{self, InnerSpace};
+use cgmath;
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -61,7 +61,6 @@ impl FpsCamera {
 
         // self.forward = cgmath::vec3(f32::sin(self.yaw), 0., -f32::cos(self.yaw));
         self.camera.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
-        println!("{:?} {:?}", self.camera.forward, self.camera.forward.magnitude());
     }
 }
 
@@ -92,12 +91,10 @@ impl OrbitCamera {
         // self.forward = cgmath::vec3(f32::sin(self.yaw), 0., -f32::cos(self.yaw));
         self.camera.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
         self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
-        println!("{:?} {:?}", self.camera.forward, self.camera.forward.magnitude());
     }
 
     pub fn handle_scroll(&mut self, dz: f32) {
-        self.offset += self.offset * 0.2 * dz;
-        println!("{:?}", self.offset);
+        self.offset -= self.offset * 0.2 * dz;
         self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
     }
 

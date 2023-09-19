@@ -369,7 +369,6 @@ impl State {
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::MouseInput { device_id: _, state, button, .. } => {
-                println!("{:?} {:?}", state, button);
                 if button == &MouseButton::Left {
                     if state == &ElementState::Pressed {
                         self.left_mouse_pressed = true;
@@ -393,7 +392,6 @@ impl State {
                 if self.left_mouse_pressed {
                     let dx = position.x - self.prev_mouse_pos.x;
                     let dy = position.y - self.prev_mouse_pos.y;
-                    println!("{:?} {:?}", dx, dy);
                     self.orbit_camera.handle_mouse_drag(dx, dy);
                 } else {
                     self.clear_color.r = position.x as f64 / self.size.width as f64;
@@ -403,7 +401,6 @@ impl State {
                 true
             }
             WindowEvent::KeyboardInput { device_id: _, input, is_synthetic: _ } => {
-                println!("{:?}", input);
                 // Spacebar physical location
                 if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Space) {
                     self.space_pressed = input.state == winit::event::ElementState::Pressed;
