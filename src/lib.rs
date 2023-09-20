@@ -1,4 +1,6 @@
 use camera::CameraUniform;
+use cgmath::Rotation3;
+use mesh::Instance;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -51,6 +53,8 @@ struct State {
 
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    instance_buffer: wgpu::Buffer,
+    instances: Vec<Instance>,
 
     orbit_camera: camera::OrbitCamera,
     camera_uniform: CameraUniform,
@@ -273,6 +277,20 @@ impl State {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let instances = (0..10).flat_map(|x| {
+            (0..10).map(move |z| {
+                let position = cgmath::Point3 { x: x as f32 - 5., y: 0., z: z as f32 - 5. };
+                let rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(x as f32 * z as f32));
+                Instance { position, rotation }
+            })
+        }).collect::<Vec<_>>();
+        let instance_data = instances.iter().map(Instance::to_data).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         Self {
             window,
             surface,
@@ -281,10 +299,14 @@ impl State {
             surface_config,
             size,
             clear_color,
+
             render_pipeline,
             render_pipeline_2,
             vertex_buffer,
             index_buffer,
+            instances,
+            instance_buffer,
+
             orbit_camera,
             camera_uniform,
             camera_buffer,
@@ -325,7 +347,7 @@ impl State {
                 module: &shader,
                 entry_point: vs_entry,
                 buffers: &[
-                    mesh::Vertex::desc(),
+                    mesh::Vertex::desc(), mesh::InstanceData::desc(),
                 ],
             },
             fragment: Some(wgpu::FragmentState {
@@ -446,8 +468,9 @@ impl State {
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..PENTAGON_INDICES.len() as u32, 0, 0..1);
+            render_pass.draw_indexed(0..PENTAGON_INDICES.len() as u32, 0, 0..self.instances.len() as _);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

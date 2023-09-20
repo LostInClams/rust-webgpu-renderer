@@ -11,6 +11,13 @@ struct VertexInput {
     @location(2) uv: vec2<f32>,
 }
 
+struct InstanceInput {
+    @location(8)  model_matrix_0: vec4<f32>,
+    @location(9)  model_matrix_1: vec4<f32>,
+    @location(10) model_matrix_2: vec4<f32>,
+    @location(11) model_matrix_3: vec4<f32>,
+};
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) vertex_color: vec3<f32>,
@@ -19,7 +26,8 @@ struct VertexOutput {
 
 @vertex
 fn vs_main (
-   vert: VertexInput
+   vert: VertexInput,
+   instance: InstanceInput
 ) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(vert.position, 1.0);
@@ -30,10 +38,17 @@ fn vs_main (
 
 @vertex
 fn vs_main_2 (
-    vert: VertexInput
+    vert: VertexInput,
+    instance: InstanceInput
 ) -> VertexOutput {
+    let model_matrix = mat4x4<f32>(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * vec4<f32>(vert.position, 1.0);
+    out.clip_position = camera.view_proj * model_matrix * vec4<f32>(vert.position, 1.0);
     out.vertex_color = vert.color.rgb;
     out.uv = vert.uv;
     return out;
