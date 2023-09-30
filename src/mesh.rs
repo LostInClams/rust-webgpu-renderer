@@ -8,7 +8,7 @@ pub struct Vertex {
     pub uv: [f32; 2],
 }
 
-impl  Vertex {
+impl Vertex {
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout { 
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -32,6 +32,20 @@ impl  Vertex {
             ],
         }
     }
+}
+
+pub struct Mesh {
+    verts: Vec<Vertex>,
+    indices: Vec<u16>,
+
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+}
+
+impl Mesh {
+    // pub fn load_glb () {
+
+    // }
 }
 
 pub struct Instance {

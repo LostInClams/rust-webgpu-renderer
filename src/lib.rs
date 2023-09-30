@@ -12,6 +12,7 @@ use wgpu::{util::DeviceExt, BindGroupLayout};
 
 mod mesh;
 mod camera;
+mod texture;
 
 // Triangle
 #[allow(unused)]
@@ -62,6 +63,8 @@ struct State {
     camera_bind_group: wgpu::BindGroup,
     prev_mouse_pos: PhysicalPosition<f64>,
 
+    depth_texture: texture::Texture,
+    diffuse_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
 
     space_pressed: bool,
@@ -118,54 +121,7 @@ impl State {
 
         // Load image data
         let diffuse_bytes = include_bytes!("uv_checker.jpg");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let diffuse_rgba = diffuse_image.to_rgba8();
-        
-        // Create texture to store image
-        use image::GenericImageView;
-        let image_size = diffuse_image.dimensions();
-        let texture_size = wgpu::Extent3d {
-            width: image_size.0,
-            height: image_size.1,
-            depth_or_array_layers: 1,
-        };
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Uv checker texture"),
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            }, 
-            &diffuse_rgba,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * image_size.0),
-                rows_per_image: Some(image_size.1),
-            },
-            texture_size,
-        );
-
-        let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+        let diffuse_texture = texture::Texture::from_memory(&device, &queue, diffuse_bytes, "uv_checker").unwrap();
 
         let texture_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor { 
@@ -234,6 +190,7 @@ impl State {
             }
         );
 
+        let depth_texture = texture::Texture::create_depth_texture(&device, &surface_config, "depth texture");
         let render_pipeline = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main", "fs_main_2", &texture_bind_group_layout, &camera_bind_group_layout);
         let render_pipeline_2 = Self::create_render_pipeline(&device, &surface_config, include_str!("basic.wgsl").into(), "vs_main_2", "fs_main", &texture_bind_group_layout, &camera_bind_group_layout);
 
@@ -244,11 +201,11 @@ impl State {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                     },
                 ]
             }
@@ -312,6 +269,9 @@ impl State {
             camera_buffer,
             camera_bind_group,
             prev_mouse_pos: PhysicalPosition { x: -1., y: -1. },
+
+            depth_texture,
+            diffuse_texture,
             diffuse_bind_group,
             space_pressed: false,
             left_mouse_pressed: false,
@@ -368,7 +328,13 @@ impl State {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0, // Weird, or cool way to say -1 (invert all bits)
@@ -386,6 +352,7 @@ impl State {
             self.surface_config.height = new_size.height;
             self.surface.configure(&self.device, &self.surface_config)
         }
+        self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.surface_config, "depth texture");
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -457,7 +424,14 @@ impl State {
                         store: true,
                     }
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             if self.space_pressed == true {
