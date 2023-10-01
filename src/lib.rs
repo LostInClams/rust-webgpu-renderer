@@ -7,8 +7,11 @@ use winit::{
     window::WindowBuilder, dpi::PhysicalPosition,
 };
 use winit::window::Window;
-use std::borrow::Cow;
+use std::{borrow::Cow, fs};
 use wgpu::{util::DeviceExt, BindGroupLayout};
+use std::fs::File;
+use std::path::Path;
+use json;
 
 mod mesh;
 mod camera;
@@ -52,6 +55,7 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     render_pipeline_2: wgpu::RenderPipeline,
 
+    mesh: mesh::Mesh,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
@@ -124,16 +128,16 @@ impl State {
         let diffuse_texture = texture::Texture::from_memory(&device, &queue, diffuse_bytes, "uv_checker").unwrap();
 
         let texture_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor { 
+            &wgpu::BindGroupLayoutDescriptor {
                 label: Some("Texture bind group layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture { 
+                        ty: wgpu::BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                             view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false 
+                            multisampled: false
                         },
                         count: None,
                     },
@@ -173,13 +177,13 @@ impl State {
         );
 
         let camera_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor { 
+            &wgpu::BindGroupLayoutDescriptor {
                 label: Some("Camera bind group layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer { 
+                        ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
@@ -222,15 +226,19 @@ impl State {
             ]
         });
 
+        
+        // Load glTF
+        let mesh = mesh::Mesh::load_gltf(&std::path::Path::new("./res/monkey.gltf"));
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex buffer"),
-            contents: bytemuck::cast_slice(PENTAGON_VERTICES),
+            contents: bytemuck::cast_slice(&mesh.verts),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index buffer"),
-            contents: bytemuck::cast_slice(PENTAGON_INDICES),
+            contents: bytemuck::cast_slice(&mesh.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -259,6 +267,8 @@ impl State {
 
             render_pipeline,
             render_pipeline_2,
+
+            mesh,
             vertex_buffer,
             index_buffer,
             instances,
@@ -290,7 +300,7 @@ impl State {
         });
         // Shorthand helper for shader from file
         // let shader = device.create_shader_module(wgpu::include_wgsl!(shader_name));
-        
+
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
@@ -444,7 +454,7 @@ impl State {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..PENTAGON_INDICES.len() as u32, 0, 0..self.instances.len() as _);
+            render_pass.draw_indexed(0..self.mesh.indices.len() as u32, 0, 0..1 as _);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
