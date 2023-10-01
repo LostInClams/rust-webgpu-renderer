@@ -73,6 +73,7 @@ struct State {
 
     space_pressed: bool,
     left_mouse_pressed: bool,
+    right_mouse_pressed: bool,
 }
 
 impl State {
@@ -285,6 +286,7 @@ impl State {
             diffuse_bind_group,
             space_pressed: false,
             left_mouse_pressed: false,
+            right_mouse_pressed: false,
         }
     }
 
@@ -371,9 +373,14 @@ impl State {
                 if button == &MouseButton::Left {
                     if state == &ElementState::Pressed {
                         self.left_mouse_pressed = true;
-
                     } else {
                         self.left_mouse_pressed = false;
+                    }
+                } else if button == &MouseButton::Right {
+                    if state == &ElementState::Pressed {
+                        self.right_mouse_pressed = true;
+                    } else {
+                        self.right_mouse_pressed = false;
                     }
                 }
                 true
@@ -392,6 +399,10 @@ impl State {
                     let dx = position.x - self.prev_mouse_pos.x;
                     let dy = position.y - self.prev_mouse_pos.y;
                     self.orbit_camera.handle_mouse_drag(dx, dy);
+                } else if self.right_mouse_pressed {
+                    let dx = position.x - self.prev_mouse_pos.x;
+                    let dy = position.y - self.prev_mouse_pos.y;
+                    self.orbit_camera.handle_mouse_pan(dx, dy);
                 } else {
                     self.clear_color.r = position.x as f64 / self.size.width as f64;
                     self.clear_color.b = position.y as f64 / self.size.height as f64;

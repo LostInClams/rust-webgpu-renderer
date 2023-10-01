@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use cgmath;
 
 #[rustfmt::skip]
@@ -90,6 +92,14 @@ impl OrbitCamera {
 
         // self.forward = cgmath::vec3(f32::sin(self.yaw), 0., -f32::cos(self.yaw));
         self.camera.forward = cgmath::vec3(f32::sin(self.yaw) * f32::cos(self.pitch), f32::sin(self.pitch), -f32::cos(self.yaw) * f32::cos(self.pitch));
+        self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
+    }
+
+    pub fn handle_mouse_pan(&mut self, dx: f64, dy: f64) {
+        let right = self.camera.up.cross(self.camera.forward);
+        let up = self.camera.forward.cross(right);
+        self.pivot = self.pivot.add(right * 0.01 * dx as f32).add(up * 0.01 * dy as f32);
+
         self.camera.position = self.pivot + self.camera.forward * -1. * self.offset;
     }
 
