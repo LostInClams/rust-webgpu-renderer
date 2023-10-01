@@ -152,7 +152,7 @@ impl State {
             }
         );
 
-        let clear_color = wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 };
+        let clear_color = wgpu::Color { r: 0.87, g: 0.87, b: 0.87, a: 1.0 };
 
         let camera = camera::Camera {
             position: cgmath::point3(0., 0., 2.),
@@ -403,9 +403,6 @@ impl State {
                     let dx = position.x - self.prev_mouse_pos.x;
                     let dy = position.y - self.prev_mouse_pos.y;
                     self.orbit_camera.handle_mouse_pan(dx, dy);
-                } else {
-                    self.clear_color.r = position.x as f64 / self.size.width as f64;
-                    self.clear_color.b = position.y as f64 / self.size.height as f64;
                 }
                 self.prev_mouse_pos = *position;
                 true
